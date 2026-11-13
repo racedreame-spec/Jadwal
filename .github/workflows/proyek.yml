@@ -1,0 +1,51 @@
+name: Build APK Jadwal
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['proyek.zip', '.github/workflows/proyek.yml']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ekstrak proyek.zip
+        run: |
+          test -f proyek.zip || { echo "proyek.zip tidak ada di root repo"; exit 1; }
+          mkdir -p src
+          unzip -q -o proyek.zip -d src
+          test -f src/settings.gradle.kts || { echo "settings.gradle.kts tidak ada di dalam zip (zip harus berisi file proyek langsung, bukan folder pembungkus)"; ls -R src | head -40; exit 1; }
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Terima lisensi SDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Build APK debug
+        working-directory: src
+        run: gradle assembleDebug --stacktrace --no-daemon 2>&1 | tee ../build.log
+
+      - name: Unggah APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Asisten-Jadwal-APK
+          path: src/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Unggah log build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: log-build
+          path: build.log
+          if-no-files-found: ignore
